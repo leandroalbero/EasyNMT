@@ -420,7 +420,7 @@ class EasyNMT:
         if self._fasttext_lang_id is None:
             import fasttext
             fasttext.FastText.eprint = lambda x: None   #Silence useless warning: https://github.com/facebookresearch/fastText/issues/1067
-            model_path = os.path.join(self._cache_folder, 'lid.176.ftz')
+            model_path = os.path.join(self._cache_folder, 'lid.176.bin')
             if not os.path.exists(model_path):
                 http_get('https://dl.fbaipublicfiles.com/fasttext/supervised-models/lid.176.bin', model_path)
             self._fasttext_lang_id = fasttext.load_model(model_path)
