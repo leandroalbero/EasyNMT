@@ -131,33 +131,29 @@ class EasyNMT:
 
         if source_lang is None and document_language_detection:
             src_langs = [self.language_detection(doc) for doc in documents]
-            
-            # Group by languages
-            lang2id = {}
-            for idx, lng in enumerate(src_langs):
-                if lng not in lang2id:
-                    lang2id[lng] = []
-                lang2id[lng].append(idx)
 
-            # Translate language wise
             output = [None] * len(documents)
-            for lng, ids in lang2id.items():
-                logger.info("Translate documents of language: {}".format(lng))
-                try:
-                    method_args['documents'] = [documents[idx] for idx in ids]
-                    method_args['source_lang'] = lng
-                    translated = self.translate(**method_args)
-                    for idx, translated_sentences in zip(ids, translated):
-                        output[idx] = translated_sentences
-                except Exception as e:
-                    logger.warning("Exception: "+str(e))
-                    raise e
+            for idx, langs in enumerate(src_langs):
+                success = False
+                for lang in langs:
+                    try:
+                        logger.info(f"Translate document {idx} of language: {lang}")
+                        method_args['documents'] = [documents[idx]]
+                        method_args['source_lang'] = lang
+                        translated = self.translate(**method_args)
+                        output[idx] = translated[0]
+                        success = True
+                        break
+                    except Exception as e:
+                        logger.warning(f"Exception for source_language `{lang}`. Error: {str(e)}. Trying next possible input language")
+
+                if not success:
+                    raise ValueError(f"Translation failed for all possible source languages for document {idx}")
 
             if is_single_doc and len(output) == 1:
                 output = output[0]
 
             return output
-
 
         if perform_sentence_splitting:
             if sentence_splitter is None:
@@ -391,7 +387,7 @@ class EasyNMT:
             except queue.Empty:
                 break
 
-    def language_detection(self, text: Union[str, List[str]]) -> str:
+    def language_detection(self, text: Union[str, List[str]]) -> List[str]:
         """
        Given a text, detects the language code and returns the ISO language code.
        It test different language detectors, based on what is available:
@@ -412,7 +408,7 @@ class EasyNMT:
 
         raise Exception("No method for automatic language detection was found. Please install at least one of the following: fasttext (pip install fasttext), langid (pip install langid), or langdetect (pip install langdetect)")
 
-    def language_detection_fasttext(self, text: str) -> str:
+    def language_detection_fasttext(self, text: str) -> List[str]:
         """
         Given a text, detects the language code and returns the ISO language code. It supports 176 languages. Uses
         the fasttext model for language detection:
@@ -426,19 +422,20 @@ class EasyNMT:
             fasttext.FastText.eprint = lambda x: None   #Silence useless warning: https://github.com/facebookresearch/fastText/issues/1067
             model_path = os.path.join(self._cache_folder, 'lid.176.ftz')
             if not os.path.exists(model_path):
-                http_get('https://dl.fbaipublicfiles.com/fasttext/supervised-models/lid.176.ftz', model_path)
+                http_get('https://dl.fbaipublicfiles.com/fasttext/supervised-models/lid.176.bin', model_path)
             self._fasttext_lang_id = fasttext.load_model(model_path)
+        predictions = self._fasttext_lang_id.predict(text.lower().replace("\r\n", " ").replace("\n", " ").strip(), k=3)
+        lang_codes = [pred.split('__')[-1] for pred in predictions[0]]
+        return lang_codes
 
-        return self._fasttext_lang_id.predict(text.lower().replace("\r\n", " ").replace("\n", " ").strip())[0][0].split('__')[-1]
-
-    def language_detection_langid(self, text: str) -> str:
+    def language_detection_langid(self, text: str) -> List[str]:
         import langid
-        return langid.classify(text.lower().replace("\r\n", " ").replace("\n", " ").strip())[0]
+        return langid.classify(text.lower().replace("\r\n", " ").replace("\n", " ").strip())
 
 
-    def language_detection_langdetect(self, text: str) -> str:
+    def language_detection_langdetect(self, text: str) -> List[str]:
         import langdetect
-        return langdetect.detect(text.lower().replace("\r\n", " ").replace("\n", " ").strip()).split("-")[0]
+        return langdetect.detect(text.lower().replace("\r\n", " ").replace("\n", " ").strip()).split("-")
 
 
     def sentence_splitting(self, text: str, lang: str = None):

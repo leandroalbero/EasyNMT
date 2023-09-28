@@ -3,7 +3,7 @@ This example tests the translation with all available models.
 """
 from easynmt import EasyNMT
 
-available_models = ['opus-mt', 'mbart50_m2m', 'm2m_100_418M', 'm2m_100_1.2B']
+available_models = ['m2m_100_418M']
 
 for model_name in available_models:
     print("\n\nLoad model:", model_name)
